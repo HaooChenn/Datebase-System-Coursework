@@ -1,0 +1,46 @@
+name: Deploy to Sealos
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        
+    - name: Install Dependencies
+      run: npm install
+      
+    - name: Build
+      run: npm run build
+      
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      
+    - name: Set up kubeconfig
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBE_CONFIG_DATA }}" > ~/.kube/config
+        chmod 600 ~/.kube/config
+        
+    - name: Deploy to Sealos
+      run: |
+        NAMESPACE=ns-qe6p72x2
+        POD_NAME=$(kubectl get pod -n $NAMESPACE -o name | grep vue-frontend | head -n 1)
+        if [ -z "$POD_NAME" ]; then
+          echo "No pod found matching vue-frontend"
+          exit 1
+        fi
+        POD_NAME=${POD_NAME#pod/}
+        echo "Found pod: $POD_NAME"
+        kubectl cp ./dist/. $NAMESPACE/$POD_NAME:/usr/share/nginx/html/ -c vue-frontend
+        echo "Files copied successfully"
